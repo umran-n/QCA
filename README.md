@@ -13,6 +13,7 @@ Built on the Quantum Capital Allocation framework (Papers I-IX, SSRN).
 | QII | GET /v1/qii/prescreen | Full QII regime signal |
 | QII | GET /v1/qii/score | Lightweight QII score |
 | Events | GET /v1/events/archetype | Seven-archetype classification |
+| Coherence | GET /v1/coherence/window | Derived holding window from ticker + event date |
 | Coherence | GET /v1/coherence/tau | Signal holding window |
 | Entanglement | GET /v1/entanglement/deff | Firm fragility score |
 

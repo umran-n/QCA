@@ -583,6 +583,31 @@ class QCAService:
             "computed_at": _utc_timestamp(),
         }
 
+    def coherence_window_snapshot(self, ticker: str, event_day: date, refresh: bool = False) -> dict[str, Any]:
+        prescreen = self.prescreen_snapshot(ticker, event_day, refresh=refresh)
+        theta_degrees = float(prescreen["components"]["theta_degrees"])
+        tau = self.tau_snapshot(ticker, theta_degrees)
+        return {
+            "ticker": prescreen["ticker"],
+            "event_date": prescreen["event_date"],
+            "t0_date": prescreen["t0_date"],
+            "signal_name": SIGNAL_NAME,
+            "qii_score": prescreen["signal"]["qii_score"],
+            "regime": prescreen["signal"]["regime"],
+            "conviction": prescreen["signal"]["conviction"],
+            "theta_degrees": tau["theta_degrees"],
+            "tau_days": tau["tau_days"],
+            "tau_formula": tau["tau_formula"],
+            "tau_max": tau["tau_max"],
+            "alpha": tau["alpha"],
+            "r_squared_fit": tau["r_squared_fit"],
+            "interpretation": tau["interpretation"],
+            "source_variant": "derived_from_qii_prescreen",
+            "platform": PLATFORM,
+            "data_tier": DATA_TIER,
+            "computed_at": _utc_timestamp(),
+        }
+
 
 def _default_root() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -720,6 +745,16 @@ def create_app(root: Path | None = None, config_path: Path | None = None) -> Fas
     ) -> dict[str, Any]:
         qca_service: QCAService = request.app.state.qca_service
         return qca_service.tau_snapshot(ticker, theta)
+
+    @app.get("/v1/coherence/window")
+    def coherence_window(
+        request: Request,
+        ticker: str = Query(..., min_length=1),
+        event_date: date = Query(...),
+        refresh: bool = Query(False),
+    ) -> dict[str, Any]:
+        qca_service: QCAService = request.app.state.qca_service
+        return qca_service.coherence_window_snapshot(ticker, event_date, refresh=refresh)
 
     @app.get("/v1/entanglement/deff")
     def entanglement_deff(

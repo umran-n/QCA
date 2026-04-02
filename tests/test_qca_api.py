@@ -102,6 +102,7 @@ class QCAApiTests(unittest.TestCase):
             "/v1/qii/score?ticker=AAPL&event_date=2025-01-30",
             "/v1/events/archetype?ticker=AAPL",
             "/v1/coherence/tau?ticker=AAPL&theta=52",
+            "/v1/coherence/window?ticker=AAPL&event_date=2025-01-30",
             "/v1/entanglement/deff?ticker=AAPL",
         ]
         for path in endpoints:
@@ -149,6 +150,20 @@ class QCAApiTests(unittest.TestCase):
         self.assertEqual(payload["ticker"], "AAPL")
         self.assertEqual(payload["source_variant"], "driver_weight_fallback")
         self.assertEqual(payload["platform"], "QCA API")
+
+    def test_coherence_window_derives_theta_from_prescreen(self) -> None:
+        prescreen = self.client.get("/v1/qii/prescreen?ticker=AAPL&event_date=2025-01-30", headers=self.auth_headers)
+        self.assertEqual(prescreen.status_code, 200)
+        prescreen_payload = prescreen.json()
+        response = self.client.get("/v1/coherence/window?ticker=AAPL&event_date=2025-01-30", headers=self.auth_headers)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["ticker"], "AAPL")
+        self.assertEqual(payload["event_date"], "2025-01-30")
+        self.assertEqual(payload["signal_name"], "QII")
+        self.assertEqual(payload["source_variant"], "derived_from_qii_prescreen")
+        self.assertEqual(payload["theta_degrees"], prescreen_payload["components"]["theta_degrees"])
+        self.assertEqual(payload["qii_score"], prescreen_payload["signal"]["qii_score"])
 
 
 if __name__ == "__main__":
