@@ -1,20 +1,33 @@
-# QCA Closest-Public Replication
+# QCA API
+> Event-driven equity intelligence powered by QII
 
-This repository contains the closest-public replication pipeline for the Quantum Capital Allocation research program based on Papers VIII and IX.
+Determines whether an upcoming capital allocation event will generate
+a CONSTRUCTIVE or DESTRUCTIVE equity signal - before price moves.
 
-The current implementation is explicit about data quality and labels every emitted artifact with `data_tier="public_proxy"`.
+Built on the Quantum Capital Allocation framework (Papers I-IX, SSRN).
 
-## Scope
+## Endpoints
 
-- seven-firm QCA event-study sample
-- `2019-01-01` to `2025-12-15` target window
-- `2025-01-01` to `2025-12-15` out-of-sample holdout
-- QII feature construction with public-proxy inputs
-- coherence / `tau` module
-- entanglement / `d_eff` screen
-- contagion edge table
+| Family | Endpoint | Description |
+|--------|----------|-------------|
+| QII | GET /v1/qii/prescreen | Full QII regime signal |
+| QII | GET /v1/qii/score | Lightweight QII score |
+| Events | GET /v1/events/archetype | Seven-archetype classification |
+| Coherence | GET /v1/coherence/tau | Signal holding window |
+| Entanglement | GET /v1/entanglement/deff | Firm fragility score |
 
-## Run
+## Platform Architecture
+
+- QCA API - the platform (this repo)
+- QII - the flagship signal
+- QCA Unified - coming (Product 3)
+
+## Research Pipeline
+
+The closest-public replication pipeline remains available for offline runs:
 
 ```powershell
 python scripts/run_qca_replication.py --refresh
+```
+
+Artifacts are written under `outputs/qca/latest/` and remain labeled `data_tier="public_proxy"`.
