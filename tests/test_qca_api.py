@@ -81,7 +81,8 @@ class QCAApiTests(unittest.TestCase):
             json.dumps(_test_config(self.tmpdir, self.bundle_path, self.overlay_path, self.output_dir), indent=2),
             encoding="utf-8",
         )
-        self.client = TestClient(create_app(root=ROOT, config_path=self.config_path))
+        self.app = create_app(root=ROOT, config_path=self.config_path)
+        self.client = TestClient(self.app)
         self.auth_headers = {"X-API-Key": "test-direct-key"}
         self.proxy_headers = {"X-RapidAPI-Proxy-Secret": "test-proxy-secret"}
 
@@ -136,6 +137,17 @@ class QCAApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["ticker"], "AAPL")
+        self.assertEqual(payload["platform"], "QCA API")
+
+    def test_entanglement_falls_back_when_historical_profile_missing(self) -> None:
+        service = self.app.state.qca_service
+        baseline = service.baseline()
+        baseline["analytics"]["entanglement_rows"] = []
+        response = self.client.get("/v1/entanglement/deff?ticker=AAPL", headers=self.auth_headers)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["ticker"], "AAPL")
+        self.assertEqual(payload["source_variant"], "driver_weight_fallback")
         self.assertEqual(payload["platform"], "QCA API")
 
 

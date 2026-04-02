@@ -143,6 +143,17 @@ def _driver_weights(particle_amplitude: float, wave_amplitude: float, theta_degr
     return {key: round(value / total, 4) for key, value in raw.items()}
 
 
+def _entropy_from_probabilities(probabilities: list[float]) -> tuple[float, float]:
+    cleaned = [max(float(value), 0.0) for value in probabilities]
+    total = sum(cleaned)
+    if total <= 0:
+        normalized = [1.0 / len(cleaned) for _ in cleaned] if cleaned else []
+    else:
+        normalized = [value / total for value in cleaned]
+    entropy = -sum(value * math.log(value, 2) for value in normalized if value > 0)
+    return entropy, 2.0 ** entropy
+
+
 def _archetype_payload(feature_row: dict, d_eff: float, entropy_bits: float, theta_std: float) -> tuple[str, str, str]:
     particle_amplitude = float(feature_row["particle_amplitude"])
     wave_amplitude = float(feature_row["wave_amplitude"])
@@ -464,6 +475,30 @@ class QCAService:
         rows.sort(key=lambda item: item["announcement_date"])
         return rows[-1]
 
+    def _fallback_entanglement_snapshot(self, ticker: str) -> dict[str, Any]:
+        feature_row = self.latest_feature_row(ticker)
+        driver_weights = _driver_weights(
+            float(feature_row["particle_amplitude"] or 0.0),
+            float(feature_row["wave_amplitude"] or 0.0),
+            float(feature_row["theta_degrees"] or 90.0),
+        )
+        eigenvalues = list(driver_weights.values())
+        entropy_bits, d_eff = _entropy_from_probabilities(eigenvalues)
+        tier = _entanglement_tier(d_eff)
+        return {
+            "ticker": ticker.upper(),
+            "d_eff": _serialize_number(d_eff, digits=4),
+            "entropy_S": _serialize_number(entropy_bits, digits=4),
+            "eigenvalues": [_serialize_number(value, digits=4) for value in eigenvalues],
+            "entanglement_tier": tier,
+            "tier_description": _tier_description(tier),
+            "tail_risk_flag": d_eff >= 3.5,
+            "source_variant": "driver_weight_fallback",
+            "platform": PLATFORM,
+            "data_tier": DATA_TIER,
+            "computed_at": _utc_timestamp(),
+        }
+
     def entanglement_snapshot(self, ticker: str) -> dict[str, Any]:
         normalized = ticker.upper()
         self.firm_for(normalized)
@@ -472,12 +507,7 @@ class QCAService:
             None,
         )
         if row is None:
-            raise QCAAPIError(
-                404,
-                "ticker_not_found",
-                f"No entanglement profile available for ticker: {normalized}",
-                ticker=normalized,
-            )
+            return self._fallback_entanglement_snapshot(normalized)
         d_eff = float(row["d_eff"])
         tier = _entanglement_tier(d_eff)
         tail_risk_flag = d_eff >= 3.5
@@ -489,6 +519,7 @@ class QCAService:
             "entanglement_tier": tier,
             "tier_description": _tier_description(tier),
             "tail_risk_flag": tail_risk_flag,
+            "source_variant": "historical_driver_system",
             "platform": PLATFORM,
             "data_tier": DATA_TIER,
             "computed_at": _utc_timestamp(),
