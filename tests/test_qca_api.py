@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -22,6 +23,12 @@ from tests.test_qca_pipeline import _fixture_bundle, _test_config
 
 class QCAApiTests(unittest.TestCase):
     def setUp(self) -> None:
+        self._prior_env = {
+            "QCA_API_KEY": os.environ.get("QCA_API_KEY"),
+            "RAPIDAPI_PROXY_SECRET": os.environ.get("RAPIDAPI_PROXY_SECRET"),
+        }
+        os.environ["QCA_API_KEY"] = "test-direct-key"
+        os.environ["RAPIDAPI_PROXY_SECRET"] = "test-proxy-secret"
         self.tmpdir = Path(tempfile.mkdtemp(dir=ROOT))
         self.bundle_path = self.tmpdir / "fixture_bundle.json"
         self.overlay_path = self.tmpdir / "manual_overlay.json"
@@ -75,10 +82,17 @@ class QCAApiTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.client = TestClient(create_app(root=ROOT, config_path=self.config_path))
+        self.auth_headers = {"X-API-Key": "test-direct-key"}
+        self.proxy_headers = {"X-RapidAPI-Proxy-Secret": "test-proxy-secret"}
 
     def tearDown(self) -> None:
         self.client.close()
         shutil.rmtree(self.tmpdir, ignore_errors=True)
+        for key, value in self._prior_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
     def test_api_endpoints_include_platform_metadata(self) -> None:
         endpoints = [
@@ -90,7 +104,8 @@ class QCAApiTests(unittest.TestCase):
             "/v1/entanglement/deff?ticker=AAPL",
         ]
         for path in endpoints:
-            response = self.client.get(path)
+            headers = None if path == "/health" else self.auth_headers
+            response = self.client.get(path, headers=headers)
             self.assertEqual(response.status_code, 200, msg=path)
             payload = response.json()
             self.assertEqual(payload["platform"], "QCA API")
@@ -98,7 +113,7 @@ class QCAApiTests(unittest.TestCase):
             self.assertIn("computed_at", payload)
 
     def test_invalid_ticker_returns_structured_404(self) -> None:
-        response = self.client.get("/v1/qii/score?ticker=XYZ&event_date=2025-01-30")
+        response = self.client.get("/v1/qii/score?ticker=XYZ&event_date=2025-01-30", headers=self.auth_headers)
         self.assertEqual(response.status_code, 404)
         payload = response.json()
         self.assertEqual(payload["error"], "ticker_not_found")
@@ -106,6 +121,22 @@ class QCAApiTests(unittest.TestCase):
         self.assertEqual(payload["platform"], "QCA API")
         self.assertEqual(payload["data_tier"], "public_proxy")
         self.assertIn("timestamp", payload)
+
+    def test_protected_endpoint_requires_auth(self) -> None:
+        response = self.client.get("/v1/entanglement/deff?ticker=AAPL")
+        self.assertEqual(response.status_code, 401)
+        payload = response.json()
+        self.assertEqual(payload["error"], "unauthorized")
+        self.assertEqual(payload["platform"], "QCA API")
+        self.assertEqual(payload["data_tier"], "public_proxy")
+        self.assertIn("computed_at", payload)
+
+    def test_rapid_proxy_secret_auth_works(self) -> None:
+        response = self.client.get("/v1/entanglement/deff?ticker=AAPL", headers=self.proxy_headers)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["ticker"], "AAPL")
+        self.assertEqual(payload["platform"], "QCA API")
 
 
 if __name__ == "__main__":

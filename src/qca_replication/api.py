@@ -40,6 +40,8 @@ SIGNAL_NAME = "QII"
 TAGLINE = "Event-driven equity intelligence powered by QII"
 API_VERSION = "1.0.0"
 DATA_TIER = "public_proxy"
+DIRECT_API_KEY_ENV = "QCA_API_KEY"
+RAPID_PROXY_SECRET_ENV = "RAPIDAPI_PROXY_SECRET"
 PAPER_URLS = [
     "https://github.com/umran-n/QCA/blob/main/paper/pdfs/Non-Linear%20Signal%20Extraction%20in%20Event-Driven%20Equities%20-%20A%20Unified%20Interference%20Functional%20%28QCA%20Series%20Paper%20IX%29.pdf",
     "https://github.com/umran-n/QCA/blob/main/paper/pdfs/Non-Stationary%20Valuation%20Dynamics%20in%20Mega-Cap%20Equities%20-%20A%20Unified%20Analysis%20of%20the%20Seven%20Archetypes%20%28Quantum%20Capital%20Allocation%20Series%20Paper%20VIII%20Meta-Synthesis%29.pdf",
@@ -195,6 +197,29 @@ def _error_payload(error: str, message: str, *, ticker: str | None = None, sugge
     if ticker is not None:
         payload["ticker"] = ticker
     return payload
+
+
+def _public_path(path: str) -> bool:
+    return path in {"/health", "/openapi.json", "/docs", "/redoc", "/docs/oauth2-redirect"}
+
+
+def _authorized_request(request: Request) -> bool:
+    direct_key = os.getenv(DIRECT_API_KEY_ENV, "").strip()
+    proxy_secret = os.getenv(RAPID_PROXY_SECRET_ENV, "").strip()
+    request_api_key = request.headers.get("X-API-Key", "").strip()
+    request_proxy_secret = request.headers.get("X-RapidAPI-Proxy-Secret", "").strip()
+    return bool((direct_key and request_api_key == direct_key) or (proxy_secret and request_proxy_secret == proxy_secret))
+
+
+def _unauthorized_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=401,
+        content=_error_payload(
+            "unauthorized",
+            "Valid X-API-Key required.",
+            suggestion="Use the RapidAPI gateway or provide a valid X-API-Key for direct access.",
+        ),
+    )
 
 
 class QCAService:
@@ -551,6 +576,15 @@ def create_app(root: Path | None = None, config_path: Path | None = None) -> Fas
         redoc_url="/redoc",
     )
     app.state.qca_service = service
+
+    @app.middleware("http")
+    async def enforce_api_auth(request: Request, call_next):
+        path = request.url.path
+        if _public_path(path) or not path.startswith("/v1/"):
+            return await call_next(request)
+        if not _authorized_request(request):
+            return _unauthorized_response()
+        return await call_next(request)
 
     @app.exception_handler(QCAAPIError)
     async def qca_api_error_handler(_: Request, exc: QCAAPIError) -> JSONResponse:
