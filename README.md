@@ -18,16 +18,3 @@ The current implementation is explicit about data quality and labels every emitt
 
 ```powershell
 python scripts/run_qca_replication.py --refresh
-```
-
-Outputs are written under `outputs/qca/latest/`.
-
-## Tests
-
-```powershell
-python -m unittest tests.test_qca_math tests.test_qca_pipeline
-```
-
-## Important Note
-
-This is a closest-public replication, not an institutional data build. The management sentiment path currently supports the documented public fallback and keeps the FinBERT upgrade path intact for a later higher-fidelity release.
