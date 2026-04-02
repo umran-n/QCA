@@ -2,7 +2,7 @@
 name = "qca-replication"
 version = "1.0.0"
 description = "QCA API and closest-public replication pipeline for Quantum Capital Allocation Papers VIII-IX"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.110.0",
   "httpx>=0.27.0",
